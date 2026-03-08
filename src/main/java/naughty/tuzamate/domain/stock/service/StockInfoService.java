@@ -5,10 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
+import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -18,7 +18,6 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class StockInfoService {
 
@@ -26,6 +25,7 @@ public class StockInfoService {
     private final RestTemplate restTemplate;
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
+    private final StockApiRetryExecutor stockApiRetryExecutor;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -38,24 +38,26 @@ public class StockInfoService {
     // 주식의 상품이름을 얻어오는 메소드
     // marketCode 300 : 한국 주식, 512 : 미국 주식
     public StockInfoDto.InfoDto getStockInfo(String stockCode, String marketCode) {
+        // 외부 조회 전용 서비스: DB 트랜잭션 없이 재시도만 적용
+        return stockApiRetryExecutor.execute("Stock search-info", () -> {
+            HttpHeaders headers = createHeaders();
+            String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-info";
 
-        HttpHeaders headers = createHeaders();
-        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-info";
+            HttpEntity<?> httpEntity = new HttpEntity<>(headers);
 
-        HttpEntity<?> httpEntity = new HttpEntity<>(headers);
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("PDNO", stockCode)
+                    .queryParam("PRDT_TYPE_CD", marketCode);
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("PDNO", stockCode)
-                .queryParam("PRDT_TYPE_CD", marketCode);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.toUriString(),
+                    HttpMethod.GET,
+                    httpEntity,
+                    String.class
+            );
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.toUriString(),
-                HttpMethod.GET,
-                httpEntity,
-                String.class
-        );
-
-        return parsingKrxInfo(response.getBody());
+            return parsingKrxInfo(response.getBody());
+        });
 
     }
 

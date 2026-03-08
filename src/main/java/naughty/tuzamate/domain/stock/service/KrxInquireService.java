@@ -5,15 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
+import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.http.*;
 
 
 /**
@@ -21,13 +18,13 @@ import org.springframework.http.*;
  * 조회하는 서비스입니다.
  */
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class KrxInquireService {
 
     private final RestTemplate restTemplate;
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
+    private final StockApiRetryExecutor stockApiRetryExecutor;
 
 
     @Value("${tuza.api.APP_KEY}")
@@ -39,24 +36,26 @@ public class KrxInquireService {
     private String accessToken;
 
     public KrxDto.InquireDto getCurInquireInfo(String stockCode) {
+        // 외부 조회 전용 서비스: DB 트랜잭션 없이 재시도만 적용
+        return stockApiRetryExecutor.execute("KRX inquire-price", () -> {
+            HttpHeaders headers = createHeaders();
+            String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price";
 
-        HttpHeaders headers = createHeaders();
-        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price";
+            HttpEntity<?> httpEntity = new HttpEntity<>(headers);
 
-        HttpEntity<?> httpEntity = new HttpEntity<>(headers);
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                    .queryParam("FID_INPUT_ISCD", stockCode);
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("FID_COND_MRKT_DIV_CODE", "J")
-                .queryParam("FID_INPUT_ISCD", stockCode);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.toUriString(),
+                    HttpMethod.GET,
+                    httpEntity,
+                    String.class
+            );
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.toUriString(),
-                HttpMethod.GET,
-                httpEntity,
-                String.class
-        );
-
-        return parsingCurInquireInfo(response.getBody());
+            return parsingCurInquireInfo(response.getBody());
+        });
     }
 
     private KrxDto.InquireDto parsingCurInquireInfo(String response) {

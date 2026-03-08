@@ -11,6 +11,8 @@ import naughty.tuzamate.domain.stock.entity.NasdaqStockCode;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockInfo;
 import naughty.tuzamate.domain.stock.repository.NasdaqStockInfoRepository;
 import naughty.tuzamate.domain.stock.repository.code.NasdaqCodeRepository;
+import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
+import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -32,6 +35,11 @@ public class NasdaqService {
     private final HantuApiTokenService hantuApiTokenService;
     private final StockInfoService stockInfoService;
     private final FilterStrategy filterStrategy;
+    private final StockRequestRateLimiter stockRequestRateLimiter;
+    private final StockApiRetryExecutor stockApiRetryExecutor;
+
+    @Value("${stock.collect.batch-size:200}")
+    private int batchSize;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -83,27 +91,28 @@ public class NasdaqService {
     }
 
     public NasdaqDto.NasdaqInfoDto getCurrentNasdaqInfo(String stockCode) {
+        // 일시 오류 구간은 재시도하여 누락을 줄인다.
+        return stockApiRetryExecutor.execute("NASDAQ price-detail", () -> {
+            HttpHeaders header = createHeaders();
 
+            String url = "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price-detail";
 
-        HttpHeaders header = createHeaders();
+            HttpEntity<?> httpEntity = new HttpEntity<>(header);
 
-        String url = "https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price-detail";
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("AUTH", "")
+                    .queryParam("EXCD", "NAS")
+                    .queryParam("SYMB", stockCode);
 
-        HttpEntity<?> httpEntity = new HttpEntity<>(header);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.toUriString(),
+                    HttpMethod.GET,
+                    httpEntity,
+                    String.class
+            );
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("AUTH", "")
-                .queryParam("EXCD", "NAS")
-                .queryParam("SYMB", stockCode);
-
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.toUriString(),
-                HttpMethod.GET,
-                httpEntity,
-                String.class
-        );
-
-        return parsingCurrentNasdaqInfo(response.getBody(), stockCode);
+            return parsingCurrentNasdaqInfo(response.getBody(), stockCode);
+        });
 
     }
 
@@ -111,11 +120,13 @@ public class NasdaqService {
         List<NasdaqStockCode> stockCodeList = nasdaqCodeRepository.findAll();
 
         nasdaqStockInfoRepository.deleteAllInBatch();
+        List<NasdaqStockInfo> batchBuffer = new ArrayList<>(batchSize);
 
         for (NasdaqStockCode stockCode : stockCodeList) {
             try {
 
-                Thread.sleep(100);
+                // sleep 대신 동기 RateLimiter로 요청 간격 제어
+                stockRequestRateLimiter.acquire();
 
                 NasdaqDto.NasdaqInfoDto currentNasdaqInfo = getCurrentNasdaqInfo(stockCode.getCode());
                 StockInfoDto.InfoDto currentStockInfo = stockInfoService.getStockInfo(stockCode.getCode(), "512");
@@ -127,7 +138,8 @@ public class NasdaqService {
 
                 NasdaqStockInfo entity = currentNasdaqInfo.toEntity(currentNasdaqInfo, currentStockInfo);
 
-                nasdaqStockInfoRepository.save(entity);
+                batchBuffer.add(entity);
+                flushBatchIfNeeded(batchBuffer);
 
                 log.info("Saved stocks is : {}", stockCode.getCode());
 
@@ -140,5 +152,21 @@ public class NasdaqService {
             }
 
         }
+        flushBatch(batchBuffer);
+    }
+
+    private void flushBatchIfNeeded(List<NasdaqStockInfo> batchBuffer) {
+        if (batchBuffer.size() >= batchSize) {
+            flushBatch(batchBuffer);
+        }
+    }
+
+    private void flushBatch(List<NasdaqStockInfo> batchBuffer) {
+        if (batchBuffer.isEmpty()) {
+            return;
+        }
+        // 단건 save 반복 대신 배치 저장
+        nasdaqStockInfoRepository.saveAll(batchBuffer);
+        batchBuffer.clear();
     }
 }

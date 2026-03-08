@@ -6,6 +6,7 @@ import naughty.tuzamate.domain.stock.entity.NasdaqStockCode;
 import naughty.tuzamate.domain.stock.entity.StockCode;
 import naughty.tuzamate.domain.stock.repository.code.NasdaqCodeRepository;
 import naughty.tuzamate.domain.stock.repository.code.StockCodeRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,8 @@ public class StockCodeService {
 
     private final StockCodeRepository stockCodeRepository;
     private final NasdaqCodeRepository nasdaqCodeRepository;
+    @Value("${stock.code.base-dir:${user.home}/stockcodes}")
+    private String stockCodeBaseDir;
 
 
      // 한국투자증권의 자료를 이용해서 코스피, 코스닥, 나스닥 주식 코드를 DB에 저장하는 메소드
@@ -65,9 +68,7 @@ public class StockCodeService {
         List<String> nasdaqStockCodes = extractNasdaqStockCode(extractDir + nasdaqTxtFileName);
         saveNasdaqStockCodes(nasdaqStockCodes);*/
 
-
-        String baseDir = "/home/ubuntu/stockcodes";
-        Path extractDir = Paths.get(baseDir);
+        Path extractDir = Paths.get(stockCodeBaseDir);
         Files.createDirectories(extractDir); // 없으면 생성
 
         Path kospiZipPath = extractDir.resolve("kospi_code.mst.zip");

@@ -61,16 +61,16 @@ public class KrxService {
                 KrxDto.FinancialDto currentFinanceOutputDto = krxFinancialService.getCurFinancialInfo(stockCode.getCode());
                 metrics.addFinancialApiNanos(System.nanoTime() - financialStart);
 
-                long stockInfoStart = System.nanoTime();
-                StockInfoDto.InfoDto currentKrxStockInfoDto = stockInfoService.getStockInfo(stockCode.getCode(), "300");
-                metrics.addStockInfoApiNanos(System.nanoTime() - stockInfoStart);
-
-
                 if (filterStrategy.shouldSkipKrx(currentPerPbrOutputDto, currentFinanceOutputDto)) {
                     metrics.incrementSkippedCount();
                     log.info("PER or PBR or EPS is zero: {}", stockCode.getCode());
                     continue;
                 }
+
+                long stockInfoStart = System.nanoTime();
+                StockInfoDto.InfoDto currentKrxStockInfoDto = stockInfoService.getStockInfo(stockCode.getCode(), "300");
+                metrics.addStockInfoApiNanos(System.nanoTime() - stockInfoStart);
+
 
                 KrxDto.KrxStockInfoDto stockInfoDto = new KrxDto.KrxStockInfoDto();
 

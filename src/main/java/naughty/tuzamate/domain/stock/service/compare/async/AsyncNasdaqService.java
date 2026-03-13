@@ -1,33 +1,22 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.compare.async;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
-import naughty.tuzamate.domain.stock.dto.StockInfoDto;
-import naughty.tuzamate.domain.stock.dto.nasdaq.NasdaqDto;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockCode;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockInfo;
 import naughty.tuzamate.domain.stock.repository.NasdaqStockInfoRepository;
 import naughty.tuzamate.domain.stock.repository.code.NasdaqCodeRepository;
-import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class NasdaqService {
+public class AsyncNasdaqService {
 
     private final NasdaqCodeRepository nasdaqCodeRepository;
     private final NasdaqStockInfoRepository nasdaqStockInfoRepository;

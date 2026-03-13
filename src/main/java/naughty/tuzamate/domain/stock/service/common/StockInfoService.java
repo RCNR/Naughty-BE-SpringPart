@@ -1,4 +1,4 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.common;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

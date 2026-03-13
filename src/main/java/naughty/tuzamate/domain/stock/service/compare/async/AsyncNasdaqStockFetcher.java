@@ -1,4 +1,4 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.compare.async;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +9,7 @@ import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
 import naughty.tuzamate.domain.stock.dto.nasdaq.NasdaqDto;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockInfo;
+import naughty.tuzamate.domain.stock.service.common.StockInfoService;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;

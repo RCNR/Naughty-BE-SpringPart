@@ -2,8 +2,8 @@ package naughty.tuzamate.auth.hantu.scheduling;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import naughty.tuzamate.domain.stock.service.KrxService;
-import naughty.tuzamate.domain.stock.service.NasdaqService;
+import naughty.tuzamate.domain.stock.service.compare.async.AsyncKrxService;
+import naughty.tuzamate.domain.stock.service.compare.async.AsyncNasdaqService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -19,8 +19,8 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "hantu.stock.schedule.enabled", havingValue = "true")
 public class HantuStockApiRefreshScheduler {
 
-    private final KrxService krxService;
-    private final NasdaqService nasdaqService;
+    private final AsyncKrxService krxService;
+    private final AsyncNasdaqService asyncNasdaqService;
 
     @Scheduled(cron = "0 39 13 * * *")
     public void refreshStockData() {
@@ -32,7 +32,7 @@ public class HantuStockApiRefreshScheduler {
             log.info("Hantu Krx API 데이터 갱신 완료");
 
             log.info("Hantu Nasdaq API 데이터 갱신 시작");
-            nasdaqService.saveNasdaqStocksInfo();
+            asyncNasdaqService.saveNasdaqStocksInfo();
             log.info("Hantu Nasdaq API 데이터 갱신 완료");
             log.info("Hantu Stock API 데이터 갱신 완료");
 

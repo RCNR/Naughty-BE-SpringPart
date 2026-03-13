@@ -1,26 +1,22 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.compare.async;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import naughty.tuzamate.domain.stock.dto.StockInfoDto;
-import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
 import naughty.tuzamate.domain.stock.entity.KrxStockInfo;
 import naughty.tuzamate.domain.stock.entity.StockCode;
 import naughty.tuzamate.domain.stock.repository.KrxStockInfoRepository;
 import naughty.tuzamate.domain.stock.repository.code.StockCodeRepository;
-import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class KrxService {
+public class AsyncKrxService {
 
     private final StockCodeRepository stockCodeRepository;
     private final KrxStockInfoRepository krxStockInfoRepository;

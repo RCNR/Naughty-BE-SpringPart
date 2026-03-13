@@ -1,32 +1,34 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.common;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.http.*;
+
 
 /**
- * 한국투자증권에서 주식현재가 시세 API를 통해 주식 EPS 값을
+ * 한국투자증권에서 주식현재가 시세 API를 통해 주식 현재가, PER, PBR, 주식 단축 종목코드, 업종 한글 종목명을
  * 조회하는 서비스입니다.
  */
-
 @Service
-@RequiredArgsConstructor
 @Transactional
-@Slf4j
-public class KrxFinancialService {
+@RequiredArgsConstructor
+public class KrxInquireService {
 
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
     private final HantuApiTokenService hantuApiTokenService;
+    private final ObjectMapper objectMapper;
+
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -36,16 +38,14 @@ public class KrxFinancialService {
 
     private String accessToken;
 
-    public KrxDto.FinancialDto getCurFinancialInfo(String stockCode) {
+    public KrxDto.InquireDto getCurInquireInfo(String stockCode) {
 
-        HttpHeaders httpHeaders = createHeaders();
+        HttpHeaders headers = createHeaders();
+        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price";
 
-        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/finance/financial-ratio";
-
-        HttpEntity<?> httpEntity = new HttpEntity<>(httpHeaders);
+        HttpEntity<?> httpEntity = new HttpEntity<>(headers);
 
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("FID_DIV_CLS_CODE", "1")
                 .queryParam("FID_COND_MRKT_DIV_CODE", "J")
                 .queryParam("FID_INPUT_ISCD", stockCode);
 
@@ -56,37 +56,30 @@ public class KrxFinancialService {
                 String.class
         );
 
-
-        return parsingCurrentFinanceInfo(response.getBody());
+        return parsingCurInquireInfo(response.getBody());
     }
 
-    private KrxDto.FinancialDto parsingCurrentFinanceInfo(String response) {
+    private KrxDto.InquireDto parsingCurInquireInfo(String response) {
 
-        KrxDto.FinancialDto data = new KrxDto.FinancialDto();
+        KrxDto.InquireDto data = new KrxDto.InquireDto();
 
         try {
-            JsonNode jsonNode = objectMapper.readTree(response);
-            JsonNode arrayNode = jsonNode.path("output");
-            /**
-             * 한투의 재무비율 관련 API 응답을 보면  output: List[ResponseBodyoutput] 형태
-             * output은 ResponseBody가 아닌 배열
-             * 한 번더 열어야 한다.
-             */
+            JsonNode rootNode = objectMapper.readTree(response);
+            JsonNode node = rootNode.path("output");
 
-            JsonNode node = arrayNode.get(0);
             if (node != null) {
-                KrxDto.FinancialDto outputDto = new KrxDto.FinancialDto();
+                KrxDto.InquireDto outputDto = new KrxDto.InquireDto();
 
-                outputDto.setEps(node.path("eps").asText("0.00"));
-
+                outputDto.setStckPrpr(node.path("stck_prpr").asText());
+                outputDto.setPer(node.path("per").asText("0.00"));
+                outputDto.setPbr(node.path("pbr").asText("0.00"));
+                outputDto.setStckShrnIscd(node.path("stck_shrn_iscd").asText());
+                outputDto.setBstpKorIsnm(node.path("bstp_kor_isnm").asText());
                 data = outputDto;
             }
-
             return data;
-
         } catch (Exception e) {
-            log.error("FinanceService Error is : {}", e.getMessage());
-            throw new RuntimeException();
+            throw new RuntimeException("Error parsing response: " + e.getMessage(), e);
         }
     }
 
@@ -98,9 +91,13 @@ public class KrxFinancialService {
         httpHeaders.setBearerAuth(accessToken);
         httpHeaders.set("appkey", appKey);
         httpHeaders.set("appsecret", appSecret);
-        httpHeaders.set("tr_id", "FHKST66430300");
+        httpHeaders.set("tr_id", "FHKST01010100");
         httpHeaders.set("custtype", "P");
 
         return httpHeaders;
+
+
     }
+
+
 }

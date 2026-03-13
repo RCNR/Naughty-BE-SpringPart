@@ -1,4 +1,4 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.compare.async;
 
 import com.google.common.util.concurrent.RateLimiter;
 import lombok.RequiredArgsConstructor;
@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
 import naughty.tuzamate.domain.stock.entity.KrxStockInfo;
+import naughty.tuzamate.domain.stock.service.common.KrxFinancialService;
+import naughty.tuzamate.domain.stock.service.common.KrxInquireService;
+import naughty.tuzamate.domain.stock.service.common.StockInfoService;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;

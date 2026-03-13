@@ -8,7 +8,13 @@ import naughty.tuzamate.domain.stock.dto.StockInfoDto;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
 import naughty.tuzamate.domain.stock.dto.nasdaq.NasdaqDto;
 import naughty.tuzamate.domain.stock.error.StockErrorCode;
-import naughty.tuzamate.domain.stock.service.*;
+import naughty.tuzamate.domain.stock.service.common.KrxFinancialService;
+import naughty.tuzamate.domain.stock.service.common.KrxInquireService;
+import naughty.tuzamate.domain.stock.service.common.StockCodeService;
+import naughty.tuzamate.domain.stock.service.common.StockInfoService;
+import naughty.tuzamate.domain.stock.service.compare.async.AsyncKrxService;
+import naughty.tuzamate.domain.stock.service.compare.async.AsyncNasdaqService;
+import naughty.tuzamate.domain.stock.service.compare.async.AsyncNasdaqStockFetcher;
 import naughty.tuzamate.global.apiPayload.CustomResponse;
 import naughty.tuzamate.global.success.GeneralSuccessCode;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,8 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class StockController {
 
     private final StockCodeService stockCodeService;
-    private final NasdaqService nasdaqService;
-    private final KrxService krxService;
+    private final AsyncNasdaqService asyncNasdaqService;
+    private final AsyncKrxService krxService;
     private final KrxInquireService krxInquireService;
     private final KrxFinancialService krxFinancialService;
     private final StockInfoService stockInfoService;
@@ -57,7 +63,7 @@ public class StockController {
             description = "나스닥 주식 전체 정보를 가져오고 저장합니다. 주식 코드를 입력하지 않아도 됩니다.")
     public CustomResponse<?> getAllNasdaqStockInfo() {
 
-        nasdaqService.saveNasdaqStocksInfo();
+        asyncNasdaqService.saveNasdaqStocksInfo();
         return CustomResponse.onSuccess(GeneralSuccessCode.CREATED, "나스닥 주식 전체 정보 저장 완료");
     }
 

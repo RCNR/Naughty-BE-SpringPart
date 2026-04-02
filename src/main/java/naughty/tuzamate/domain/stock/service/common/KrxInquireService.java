@@ -5,15 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
+import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.http.*;
 
 
 /**
@@ -21,13 +18,13 @@ import org.springframework.http.*;
  * 조회하는 서비스입니다.
  */
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class KrxInquireService {
 
     private final RestTemplate restTemplate;
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
+    private final StockRequestRateLimiter stockRequestRateLimiter;
 
 
     @Value("${tuza.api.APP_KEY}")
@@ -39,6 +36,7 @@ public class KrxInquireService {
     private String accessToken;
 
     public KrxDto.InquireDto getCurInquireInfo(String stockCode) {
+        acquireRequestPermit();
 
         HttpHeaders headers = createHeaders();
         String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price";
@@ -57,6 +55,15 @@ public class KrxInquireService {
         );
 
         return parsingCurInquireInfo(response.getBody());
+    }
+
+    private void acquireRequestPermit() {
+        try {
+            stockRequestRateLimiter.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("KRX inquire request interrupted", e);
+        }
     }
 
     private KrxDto.InquireDto parsingCurInquireInfo(String response) {

@@ -6,10 +6,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
+import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -20,13 +20,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 @Slf4j
 public class KrxFinancialService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final HantuApiTokenService hantuApiTokenService;
+    private final StockRequestRateLimiter stockRequestRateLimiter;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -37,6 +37,7 @@ public class KrxFinancialService {
     private String accessToken;
 
     public KrxDto.FinancialDto getCurFinancialInfo(String stockCode) {
+        acquireRequestPermit();
 
         HttpHeaders httpHeaders = createHeaders();
 
@@ -58,6 +59,15 @@ public class KrxFinancialService {
 
 
         return parsingCurrentFinanceInfo(response.getBody());
+    }
+
+    private void acquireRequestPermit() {
+        try {
+            stockRequestRateLimiter.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("KRX financial request interrupted", e);
+        }
     }
 
     private KrxDto.FinancialDto parsingCurrentFinanceInfo(String response) {

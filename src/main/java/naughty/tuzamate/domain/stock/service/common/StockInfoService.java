@@ -5,10 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
+import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -18,7 +18,6 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class StockInfoService {
 
@@ -26,6 +25,7 @@ public class StockInfoService {
     private final RestTemplate restTemplate;
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
+    private final StockRequestRateLimiter stockRequestRateLimiter;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -38,6 +38,7 @@ public class StockInfoService {
     // 주식의 상품이름을 얻어오는 메소드
     // marketCode 300 : 한국 주식, 512 : 미국 주식
     public StockInfoDto.InfoDto getStockInfo(String stockCode, String marketCode) {
+        acquireRequestPermit();
 
         HttpHeaders headers = createHeaders();
         String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-info";
@@ -57,6 +58,15 @@ public class StockInfoService {
 
         return parsingKrxInfo(response.getBody());
 
+    }
+
+    private void acquireRequestPermit() {
+        try {
+            stockRequestRateLimiter.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("KRX stock-info request interrupted", e);
+        }
     }
 
     private StockInfoDto.InfoDto parsingKrxInfo(String response) {

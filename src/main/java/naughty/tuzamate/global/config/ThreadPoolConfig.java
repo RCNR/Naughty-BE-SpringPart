@@ -16,9 +16,10 @@ public class ThreadPoolConfig {
 
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
-        executor.setCorePoolSize(3);
-        executor.setMaxPoolSize(6); // 최대 쓰레드 개수
-        executor.setQueueCapacity(4000); // 대기 큐의 최대 크기
+        executor.setCorePoolSize(8);
+        executor.setMaxPoolSize(16); // 최대 쓰레드 개수
+        executor.setQueueCapacity(100); // 대기 큐의 최대 크기
+        executor.setAllowCoreThreadTimeOut(true);
 
 
         executor.setThreadNamePrefix("Stock-Thread-"); // 쓰레드 이름 접두사 설정

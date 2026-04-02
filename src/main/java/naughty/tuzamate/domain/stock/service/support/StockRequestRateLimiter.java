@@ -15,14 +15,15 @@ public class StockRequestRateLimiter {
 
         int safePermitsPerSecond = Math.max(1, permitsPerSecond);
 
-        // 요청 간 최소 간격
+        // 요청 1건당 최소 간격
         this.intervalNanos = TimeUnit.SECONDS.toNanos(1) / safePermitsPerSecond;
 
-        // 다음 허용되는 시각
+        // 다음 요청이 허용되는 시각
         this.nextAllowedTimeNanos = 0L;
 
     }
 
+    // 여러 스레드에서 동시에 호출되면 nextAllowedTimeNanos 꼬이게 업이드테 될 수 있음 -> synchronized로 동기화
     public synchronized void acquire() throws InterruptedException {
         long now = System.nanoTime();
 

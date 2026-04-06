@@ -8,6 +8,8 @@ import naughty.tuzamate.domain.stock.service.common.KrxFinancialService;
 import naughty.tuzamate.domain.stock.service.common.KrxInquireService;
 import naughty.tuzamate.domain.stock.service.common.StockInfoService;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,7 @@ public class AsyncKrxStockFetcher {
     private final KrxFinancialService krxFinancialService;
     private final StockInfoService stockInfoService;
     private final FilterStrategy filterStrategy;
+    private final MeterRegistry meterRegistry;
 
     /**
      * 3개의 API호출과 결과를 비동기 메소드로 묶는다.
@@ -32,18 +35,31 @@ public class AsyncKrxStockFetcher {
     public CompletableFuture<Optional<KrxStockInfo>> fetchStock(String stockCode) {
 
         try {
-            // 주식 코드를 이용해 현재가, PER, PBR, 업종 한글 종목명 조회
+            // Outbound: 현재가, PER, PBR, 업종 한글 종목명 조회
+            Timer.Sample inquireSample = Timer.start(meterRegistry);
             KrxDto.InquireDto currentPerPbrOutputDto = krxInquireService.getCurInquireInfo(stockCode);
+            inquireSample.stop(Timer.builder("krx.api.outbound")
+                    .tag("api", "inquire")
+                    .register(meterRegistry));
 
-            // 주식 코드를 이용해 EPS 값 조회
+            // Outbound: EPS 값 조회
+            Timer.Sample financialSample = Timer.start(meterRegistry);
             KrxDto.FinancialDto currentFinanceOutputDto = krxFinancialService.getCurFinancialInfo(stockCode);
+            financialSample.stop(Timer.builder("krx.api.outbound")
+                    .tag("api", "financial")
+                    .register(meterRegistry));
 
             if (filterStrategy.shouldSkipKrx(currentPerPbrOutputDto, currentFinanceOutputDto)) {
                 log.info("PER or PBR or EPS is zero: {}", stockCode);
                 return CompletableFuture.completedFuture(Optional.empty());
             }
 
+            // Outbound: 상품 기본 조회
+            Timer.Sample stockInfoSample = Timer.start(meterRegistry);
             StockInfoDto.InfoDto currentKrxStockInfoDto = stockInfoService.getStockInfo(stockCode, "300");
+            stockInfoSample.stop(Timer.builder("krx.api.outbound")
+                    .tag("api", "stock-info")
+                    .register(meterRegistry));
 
             KrxDto.KrxStockInfoDto stockInfoDto = new KrxDto.KrxStockInfoDto();
 

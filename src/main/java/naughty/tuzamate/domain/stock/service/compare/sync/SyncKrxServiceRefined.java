@@ -1,5 +1,4 @@
 package naughty.tuzamate.domain.stock.service.compare.sync;
-
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +11,6 @@ import naughty.tuzamate.domain.stock.repository.code.StockCodeRepository;
 import naughty.tuzamate.domain.stock.service.common.KrxFinancialService;
 import naughty.tuzamate.domain.stock.service.common.KrxInquireService;
 import naughty.tuzamate.domain.stock.service.common.StockInfoService;
-import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -33,7 +31,6 @@ public class SyncKrxServiceRefined {
     private final KrxStockInfoRepository krxStockInfoRepository;
     private final StockInfoService stockInfoService;
     private final FilterStrategy filterStrategy;
-    private final StockRequestRateLimiter stockRequestRateLimiter;
 
     @Value("${stock.collect.batch-size}")
     private int batchSize;
@@ -52,9 +49,6 @@ public class SyncKrxServiceRefined {
 
         for (StockCode stockCode : stockCodeList) {
             try {
-                // sleep 대신 동기 RateLimiter로 요청 간격 제어
-                stockRequestRateLimiter.acquire();
-
                 long inquireStart = System.nanoTime();
                 // 주식 코드를 이용해 현재가, PER, PBR, 업종 한글 종목명 조회
                 KrxDto.InquireDto currentPerPbrOutputDto = krxInquireService.getCurInquireInfo(stockCode.getCode());
@@ -90,10 +84,6 @@ public class SyncKrxServiceRefined {
 
                 log.info("Saved stocks is : {}", stockCode.getCode());
 
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // 현재 스레드 인터럽트 상태 복구
-                log.info("Thread Interrupted : {}", e.getMessage());
-                break;
             } catch (Exception e) {
                 metrics.incrementFailedCount();
                 log.info("Error stock code is {} : {} and pass!", stockCode.getCode(), e.getMessage());

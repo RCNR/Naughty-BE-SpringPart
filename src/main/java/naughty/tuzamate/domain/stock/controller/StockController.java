@@ -15,6 +15,7 @@ import naughty.tuzamate.domain.stock.service.common.StockInfoService;
 import naughty.tuzamate.domain.stock.service.compare.async.AsyncKrxService;
 import naughty.tuzamate.domain.stock.service.compare.async.AsyncNasdaqService;
 import naughty.tuzamate.domain.stock.service.compare.async.AsyncNasdaqStockFetcher;
+import naughty.tuzamate.domain.stock.service.compare.sync.SyncKrxServiceRefined;
 import naughty.tuzamate.global.apiPayload.CustomResponse;
 import naughty.tuzamate.global.success.GeneralSuccessCode;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,11 +32,12 @@ public class StockController {
 
     private final StockCodeService stockCodeService;
     private final AsyncNasdaqService asyncNasdaqService;
-    private final AsyncKrxService krxService;
+    private final AsyncKrxService asyncKrxService;
     private final KrxInquireService krxInquireService;
     private final KrxFinancialService krxFinancialService;
     private final StockInfoService stockInfoService;
     private final AsyncNasdaqStockFetcher asyncNasdaqStockFetcher;
+    private final SyncKrxServiceRefined syncKrxServiceRefined;
 
     @PostMapping("/post-stock-codes")
     @Operation(summary = "주식 코드 저장", description = "코스피, 코스닥, 나스닥 주식 코드를 저장합니다.")
@@ -72,7 +74,8 @@ public class StockController {
             description = "주식 현재가, per, pbr, 종목코드, 업종, EPS, 상품 이름을 가져오고 저장합니다")
     public CustomResponse<?> getAllKrxStockInfo() {
 
-        krxService.saveKrxStocksInfo();
+        asyncKrxService.saveKrxStocksInfo();
+//        syncKrxServiceRefined.saveKrxStocksInfo();
         return CustomResponse.onSuccess(GeneralSuccessCode.CREATED, "KRX 주식 전체 정보 저장 완료");
 
     }

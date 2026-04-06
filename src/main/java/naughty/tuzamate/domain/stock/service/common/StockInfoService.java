@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
+import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
 import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -26,6 +27,7 @@ public class StockInfoService {
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
     private final StockRequestRateLimiter stockRequestRateLimiter;
+    private final StockApiRetryExecutor stockApiRetryExecutor;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -40,24 +42,25 @@ public class StockInfoService {
     public StockInfoDto.InfoDto getStockInfo(String stockCode, String marketCode) {
         acquireRequestPermit();
 
-        HttpHeaders headers = createHeaders();
-        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-info";
+        return stockApiRetryExecutor.execute("stock-info", () -> {
+            HttpHeaders headers = createHeaders();
+            String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/search-info";
 
-        HttpEntity<?> httpEntity = new HttpEntity<>(headers);
+            HttpEntity<?> httpEntity = new HttpEntity<>(headers);
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("PDNO", stockCode)
-                .queryParam("PRDT_TYPE_CD", marketCode);
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("PDNO", stockCode)
+                    .queryParam("PRDT_TYPE_CD", marketCode);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.toUriString(),
-                HttpMethod.GET,
-                httpEntity,
-                String.class
-        );
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.toUriString(),
+                    HttpMethod.GET,
+                    httpEntity,
+                    String.class
+            );
 
-        return parsingKrxInfo(response.getBody());
-
+            return parsingKrxInfo(response.getBody());
+        });
     }
 
     private void acquireRequestPermit() {

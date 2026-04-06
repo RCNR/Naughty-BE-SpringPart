@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
+import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
 import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -27,6 +28,7 @@ public class KrxFinancialService {
     private final ObjectMapper objectMapper;
     private final HantuApiTokenService hantuApiTokenService;
     private final StockRequestRateLimiter stockRequestRateLimiter;
+    private final StockApiRetryExecutor stockApiRetryExecutor;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -39,26 +41,27 @@ public class KrxFinancialService {
     public KrxDto.FinancialDto getCurFinancialInfo(String stockCode) {
         acquireRequestPermit();
 
-        HttpHeaders httpHeaders = createHeaders();
+        return stockApiRetryExecutor.execute("financial", () -> {
+            HttpHeaders httpHeaders = createHeaders();
 
-        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/finance/financial-ratio";
+            String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/finance/financial-ratio";
 
-        HttpEntity<?> httpEntity = new HttpEntity<>(httpHeaders);
+            HttpEntity<?> httpEntity = new HttpEntity<>(httpHeaders);
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("FID_DIV_CLS_CODE", "1")
-                .queryParam("FID_COND_MRKT_DIV_CODE", "J")
-                .queryParam("FID_INPUT_ISCD", stockCode);
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("FID_DIV_CLS_CODE", "1")
+                    .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                    .queryParam("FID_INPUT_ISCD", stockCode);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.toUriString(),
-                HttpMethod.GET,
-                httpEntity,
-                String.class
-        );
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.toUriString(),
+                    HttpMethod.GET,
+                    httpEntity,
+                    String.class
+            );
 
-
-        return parsingCurrentFinanceInfo(response.getBody());
+            return parsingCurrentFinanceInfo(response.getBody());
+        });
     }
 
     private void acquireRequestPermit() {

@@ -46,7 +46,7 @@ public class AsyncKrxService {
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[0])).join();
 
         outboundSample.stop(Timer.builder("krx.outbound.total")
-                .description("전체 외부 API 호출 소요 시간")
+                .tag("model", "async-blocking")
                 .register(meterRegistry));
         log.info("모든 한국 주식 정보 요청 완료");
 
@@ -65,12 +65,12 @@ public class AsyncKrxService {
         Timer.Sample inboundSample = Timer.start(meterRegistry);
         asyncKrxPersistenceService.replaceAllKrxStocks(collectedStocks, batchSize);
         inboundSample.stop(Timer.builder("krx.inbound.db")
-                .description("DB 저장 소요 시간")
+                .tag("model", "async-blocking")
                 .register(meterRegistry));
         log.info("{} 개의 한국 주식 정보를 DB에 저장 완료", collectedStocks.size());
 
         totalSample.stop(Timer.builder("krx.pipeline.total")
-                .description("전체 파이프라인 소요 시간 (outbound + inbound)")
+                .tag("model", "async-blocking")
                 .register(meterRegistry));
         log.info("한국 주식 정보 저장/업데이트 완료");
     }

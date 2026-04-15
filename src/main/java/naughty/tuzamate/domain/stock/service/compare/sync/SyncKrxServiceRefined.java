@@ -8,10 +8,10 @@ import naughty.tuzamate.domain.stock.entity.KrxStockInfo;
 import naughty.tuzamate.domain.stock.entity.StockCode;
 import naughty.tuzamate.domain.stock.repository.KrxStockInfoRepository;
 import naughty.tuzamate.domain.stock.repository.code.StockCodeRepository;
-import naughty.tuzamate.domain.stock.service.common.KrxFinancialService;
-import naughty.tuzamate.domain.stock.service.common.KrxInquireService;
-import naughty.tuzamate.domain.stock.service.common.StockInfoService;
+import naughty.tuzamate.domain.stock.service.compare.blocking.KrxBlockingApiClient;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
@@ -23,14 +23,16 @@ import java.util.concurrent.TimeUnit;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// 동기적 API 호출 + 배치 저장 전략을 적용한 KRX 수집 서비스
 public class SyncKrxServiceRefined {
 
     private final StockCodeRepository stockCodeRepository;
-    private final KrxInquireService krxInquireService;
-    private final KrxFinancialService krxFinancialService;
+    private final KrxBlockingApiClient blockingApiClient;
     private final KrxStockInfoRepository krxStockInfoRepository;
-    private final StockInfoService stockInfoService;
     private final FilterStrategy filterStrategy;
+    private final MeterRegistry meterRegistry;
+
+    private static final String MODEL = "sync-blocking";
 
     @Value("${stock.collect.batch-size}")
     private int batchSize;
@@ -40,24 +42,34 @@ public class SyncKrxServiceRefined {
         List<StockCode> stockCodeList = stockCodeRepository.findAll();
         KrxCollectionMetrics metrics = new KrxCollectionMetrics(stockCodeList.size());
 
+        Timer.Sample totalSample = Timer.start(meterRegistry);
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
         log.info("주식 저장 시작");
+
+        // Outbound 전체 구간 측정: 동기 API 호출 + 처리
+        Timer.Sample outboundSample = Timer.start(meterRegistry);
 
         krxStockInfoRepository.deleteAllInBatch();
         List<KrxStockInfo> batchBuffer = new ArrayList<>(batchSize);
 
         for (StockCode stockCode : stockCodeList) {
             try {
+                Timer.Sample inquireSample = Timer.start(meterRegistry);
                 long inquireStart = System.nanoTime();
-                // 주식 코드를 이용해 현재가, PER, PBR, 업종 한글 종목명 조회
-                KrxDto.InquireDto currentPerPbrOutputDto = krxInquireService.getCurInquireInfo(stockCode.getCode());
+                KrxDto.InquireDto currentPerPbrOutputDto = blockingApiClient.getCurInquireInfo(stockCode.getCode());
                 metrics.addInquireApiNanos(System.nanoTime() - inquireStart);
+                inquireSample.stop(Timer.builder("krx.api.outbound")
+                        .tag("model", MODEL).tag("api", "inquire")
+                        .register(meterRegistry));
 
+                Timer.Sample financialSample = Timer.start(meterRegistry);
                 long financialStart = System.nanoTime();
-                // 주식 코드를 이용해 EPS 값 조회
-                KrxDto.FinancialDto currentFinanceOutputDto = krxFinancialService.getCurFinancialInfo(stockCode.getCode());
+                KrxDto.FinancialDto currentFinanceOutputDto = blockingApiClient.getCurFinancialInfo(stockCode.getCode());
                 metrics.addFinancialApiNanos(System.nanoTime() - financialStart);
+                financialSample.stop(Timer.builder("krx.api.outbound")
+                        .tag("model", MODEL).tag("api", "financial")
+                        .register(meterRegistry));
 
                 if (filterStrategy.shouldSkipKrx(currentPerPbrOutputDto, currentFinanceOutputDto)) {
                     metrics.incrementSkippedCount();
@@ -65,9 +77,13 @@ public class SyncKrxServiceRefined {
                     continue;
                 }
 
+                Timer.Sample stockInfoSample = Timer.start(meterRegistry);
                 long stockInfoStart = System.nanoTime();
-                StockInfoDto.InfoDto currentKrxStockInfoDto = stockInfoService.getStockInfo(stockCode.getCode(), "300");
+                StockInfoDto.InfoDto currentKrxStockInfoDto = blockingApiClient.getStockInfo(stockCode.getCode(), "300");
                 metrics.addStockInfoApiNanos(System.nanoTime() - stockInfoStart);
+                stockInfoSample.stop(Timer.builder("krx.api.outbound")
+                        .tag("model", MODEL).tag("api", "stock-info")
+                        .register(meterRegistry));
 
 
                 KrxDto.KrxStockInfoDto stockInfoDto = new KrxDto.KrxStockInfoDto();
@@ -89,9 +105,25 @@ public class SyncKrxServiceRefined {
                 log.info("Error stock code is {} : {} and pass!", stockCode.getCode(), e.getMessage());
             }
         }
+
+        outboundSample.stop(Timer.builder("krx.outbound.total")
+                .tag("model", MODEL)
+                .register(meterRegistry));
+
+        // Inbound 구간 측정: DB 저장
+        Timer.Sample inboundSample = Timer.start(meterRegistry);
         flushBatch(batchBuffer, metrics);
+        inboundSample.stop(Timer.builder("krx.inbound.db")
+                .tag("model", MODEL)
+                .register(meterRegistry));
+
+        totalSample.stop(Timer.builder("krx.pipeline.total")
+                .tag("model", MODEL)
+                .register(meterRegistry));
 
         stopWatch.stop();
+
+        // 수집 성능 요약 로그 출력
         logCollectionMetrics(stopWatch, metrics);
         log.info("주식 저장 종료. 총 소요 시간: {} seconds", stopWatch.getTotalTimeSeconds());
     }
@@ -186,42 +218,6 @@ public class SyncKrxServiceRefined {
 
         private void addBatchSaveNanos(long nanos) {
             batchSaveNanos += nanos;
-        }
-
-        private int getTotalStocks() {
-            return totalStocks;
-        }
-
-        private int getSavedCount() {
-            return savedCount;
-        }
-
-        private int getSkippedCount() {
-            return skippedCount;
-        }
-
-        private int getFailedCount() {
-            return failedCount;
-        }
-
-        private int getBatchFlushCount() {
-            return batchFlushCount;
-        }
-
-        private long getInquireApiNanos() {
-            return inquireApiNanos;
-        }
-
-        private long getFinancialApiNanos() {
-            return financialApiNanos;
-        }
-
-        private long getStockInfoApiNanos() {
-            return stockInfoApiNanos;
-        }
-
-        private long getBatchSaveNanos() {
-            return batchSaveNanos;
         }
 
         private long getTotalApiNanos() {

@@ -17,7 +17,12 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import io.netty.channel.ChannelOption;
 
+import java.time.Duration;
 import java.util.List;
 
 @Configuration
@@ -27,10 +32,19 @@ public class WebConfig implements WebMvcConfigurer {
     private final UserInfoResolver userInfoResolver;
     private final UserIdInfoResolver userIdInfoResolver;
 
+    // WebClient과 RestTemplate 모두 최대 20개의 커넥션을 유지하도록 설정
     @Bean
-
     public WebClient webClient() {
-        return WebClient.builder().build();
+        ConnectionProvider provider = ConnectionProvider.builder("benchmark")
+                .maxConnections(20)
+                .pendingAcquireTimeout(Duration.ofSeconds(10))
+                .build();
+        HttpClient httpClient = HttpClient.create(provider)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .responseTimeout(Duration.ofSeconds(5));
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .build();
     }
 
     @Bean

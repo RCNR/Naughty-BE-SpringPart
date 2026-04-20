@@ -13,23 +13,28 @@ public class ThreadPoolConfig {
 
     @Bean(name = "taskExecutor")
     public Executor taskExecutor() {
+        return createExecutor("Stock-Thread-");
+    }
 
+    // KRX와 NASDAQ 각각 별도의 스레드 풀을 사용하여 독립적으로 작업 처리
+    @Bean(name = "krxTaskExecutor")
+    public Executor krxTaskExecutor() {
+        return createExecutor("KRX-Thread-");
+    }
+
+    @Bean(name = "nasdaqTaskExecutor")
+    public Executor nasdaqTaskExecutor() {
+        return createExecutor("NASDAQ-Thread-");
+    }
+
+    private ThreadPoolTaskExecutor createExecutor(String threadNamePrefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-
-        executor.setCorePoolSize(3);
-        executor.setMaxPoolSize(6); // 최대 쓰레드 개수
-        executor.setQueueCapacity(4000); // 대기 큐의 최대 크기
-
-
-        executor.setThreadNamePrefix("Stock-Thread-"); // 쓰레드 이름 접두사 설정
-
-        /**
-         * ThreadPoolExecutor의 기본 정책은 AbortPolicy로, 큐가 가득 찼을 때 예외를 발생시킴
-         * 작업 요청한 스레드에서 직접 그 일 처리하도록 한다.
-         *
-         */
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100);
+        executor.setAllowCoreThreadTimeOut(true);
+        executor.setThreadNamePrefix(threadNamePrefix);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-
         executor.initialize();
         return executor;
     }

@@ -41,3 +41,5 @@ out/
 
 /src/main/generated/
 src/main/resources/firebase/*.json
+/.gradle-local/*
+/monitoring

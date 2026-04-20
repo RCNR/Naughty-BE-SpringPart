@@ -1,19 +1,17 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.common;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.krx.KrxDto;
+import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
+import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.http.*;
 
 
 /**
@@ -21,13 +19,14 @@ import org.springframework.http.*;
  * 조회하는 서비스입니다.
  */
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class KrxInquireService {
 
     private final RestTemplate restTemplate;
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
+    private final StockRequestRateLimiter stockRequestRateLimiter;
+    private final StockApiRetryExecutor stockApiRetryExecutor;
 
 
     @Value("${tuza.api.APP_KEY}")
@@ -39,24 +38,36 @@ public class KrxInquireService {
     private String accessToken;
 
     public KrxDto.InquireDto getCurInquireInfo(String stockCode) {
+        acquireRequestPermit();
 
-        HttpHeaders headers = createHeaders();
-        String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price";
+        return stockApiRetryExecutor.execute("inquire", () -> {
+            HttpHeaders headers = createHeaders();
+            String url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price";
 
-        HttpEntity<?> httpEntity = new HttpEntity<>(headers);
+            HttpEntity<?> httpEntity = new HttpEntity<>(headers);
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-                .queryParam("FID_COND_MRKT_DIV_CODE", "J")
-                .queryParam("FID_INPUT_ISCD", stockCode);
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                    .queryParam("FID_INPUT_ISCD", stockCode);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.toUriString(),
-                HttpMethod.GET,
-                httpEntity,
-                String.class
-        );
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.toUriString(),
+                    HttpMethod.GET,
+                    httpEntity,
+                    String.class
+            );
 
-        return parsingCurInquireInfo(response.getBody());
+            return parsingCurInquireInfo(response.getBody());
+        });
+    }
+
+    private void acquireRequestPermit() {
+        try {
+            stockRequestRateLimiter.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("KRX inquire request interrupted", e);
+        }
     }
 
     private KrxDto.InquireDto parsingCurInquireInfo(String response) {

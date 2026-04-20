@@ -1,14 +1,15 @@
-package naughty.tuzamate.domain.stock.service;
+package naughty.tuzamate.domain.stock.service.compare.async;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.util.concurrent.RateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
 import naughty.tuzamate.domain.stock.dto.nasdaq.NasdaqDto;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockInfo;
+import naughty.tuzamate.domain.stock.service.common.StockInfoService;
+import naughty.tuzamate.domain.stock.service.compare.support.ApiRateLimiter;
 import naughty.tuzamate.domain.stock.strategy.FilterStrategy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -19,7 +20,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -31,8 +31,7 @@ public class AsyncNasdaqStockFetcher {
     private final HantuApiTokenService hantuApiTokenService;
     private final StockInfoService stockInfoService;
     private final FilterStrategy filterStrategy;
-
-    private final RateLimiter rateLimiter = RateLimiter.create(15.0, 1, TimeUnit.SECONDS);
+    private final ApiRateLimiter apiRateLimiter;
 
     @Value("${tuza.api.APP_KEY}")
     private String appKey;
@@ -40,11 +39,11 @@ public class AsyncNasdaqStockFetcher {
     @Value("${tuza.api.APP_SECRET_KEY}")
     private String appSecret;
 
-    @Async("taskExecutor")
+    @Async("nasdaqTaskExecutor")
     public CompletableFuture<Optional<NasdaqStockInfo>> fetchStock(String stockCode) {
 
         try {
-            rateLimiter.acquire(3);
+            apiRateLimiter.acquireBlocking();
 
 
             HttpHeaders header = createHeaders();

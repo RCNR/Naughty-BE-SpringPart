@@ -27,7 +27,7 @@ public class AsyncKrxStockFetcher {
      * 3개의 API호출과 결과를 비동기 메소드로 묶는다.
      * StockCode를 받아 KrxStockInfo 엔티티를 CompleteableFuture로 반환한다.
      */
-    @Async("taskExecutor") // 별도 쓰레드에서의 비동기 실행을 위한 어노테이션
+    @Async("krxTaskExecutor")
     public CompletableFuture<Optional<KrxStockInfo>> fetchStock(String stockCode) {
 
         try {

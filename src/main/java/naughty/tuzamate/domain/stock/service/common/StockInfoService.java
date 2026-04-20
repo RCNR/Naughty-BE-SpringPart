@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import naughty.tuzamate.auth.hantu.service.HantuApiTokenService;
 import naughty.tuzamate.domain.stock.dto.StockInfoDto;
+import naughty.tuzamate.domain.stock.service.compare.support.ApiRateLimiter;
 import naughty.tuzamate.domain.stock.service.support.StockApiRetryExecutor;
-import naughty.tuzamate.domain.stock.service.support.StockRequestRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ public class StockInfoService {
     private final RestTemplate restTemplate;
     private final HantuApiTokenService hantuApiTokenService;
     private final ObjectMapper objectMapper;
-    private final StockRequestRateLimiter stockRequestRateLimiter;
+    private final ApiRateLimiter apiRateLimiter;
     private final StockApiRetryExecutor stockApiRetryExecutor;
 
     @Value("${tuza.api.APP_KEY}")
@@ -65,10 +65,10 @@ public class StockInfoService {
 
     private void acquireRequestPermit() {
         try {
-            stockRequestRateLimiter.acquire();
+            apiRateLimiter.acquireBlocking();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("KRX stock-info request interrupted", e);
+            throw new IllegalStateException("stock-info request interrupted", e);
         }
     }
 

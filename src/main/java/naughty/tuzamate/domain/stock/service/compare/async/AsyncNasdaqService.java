@@ -4,10 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockCode;
 import naughty.tuzamate.domain.stock.entity.NasdaqStockInfo;
-import naughty.tuzamate.domain.stock.repository.NasdaqStockInfoRepository;
 import naughty.tuzamate.domain.stock.repository.code.NasdaqCodeRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -19,16 +17,12 @@ import java.util.concurrent.CompletableFuture;
 public class AsyncNasdaqService {
 
     private final NasdaqCodeRepository nasdaqCodeRepository;
-    private final NasdaqStockInfoRepository nasdaqStockInfoRepository;
     private final AsyncNasdaqStockFetcher asyncNasdaqStockFetcher;
+    private final AsyncNasdaqPersistenceService asyncNasdaqPersistenceService;
 
-    @Transactional
     public void saveNasdaqStocksInfo() {
         log.info("미국 주식 정보 저장/업데이트 시작");
         long start = System.currentTimeMillis();
-
-        // 기존 데이터 삭제
-        nasdaqStockInfoRepository.deleteAllInBatch();
 
         List<NasdaqStockCode> stockCodeList = nasdaqCodeRepository.findAll();
 
@@ -51,13 +45,10 @@ public class AsyncNasdaqService {
                 .toList();
 
         // 데이터 DB에 일괄 저장
-        if (!stockInfoList.isEmpty()) {
-            log.info("{} 개의 나스닥 주식 정보를 DB에 저장 시작", stockInfoList.size());
-            nasdaqStockInfoRepository.saveAll(stockInfoList);
-        }
+        asyncNasdaqPersistenceService.replaceAllNasdaqStocks(stockInfoList);
+        log.info("{} 개의 나스닥 주식 정보를 DB에 저장 완료", stockInfoList.size());
 
         long end = System.currentTimeMillis();
         log.info("나스닥 주식 정보 저장/업데이트 완료, 소요 시간: {} ms", (end - start));
-
     }
 }
